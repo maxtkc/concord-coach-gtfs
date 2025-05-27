@@ -1,0 +1,24 @@
+# Bytecode files
+*.pyc
+__pycache__/
+
+# Virtual environment
+venv/
+myenv/
+.venv/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Log files and databases
+*.log
+*.sql
+*.sqlite
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo

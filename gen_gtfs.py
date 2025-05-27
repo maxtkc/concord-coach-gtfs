@@ -1,0 +1,2045 @@
+#!/usr/bin/env python3
+
+import calendar
+import os
+import shutil
+import tempfile
+import json
+import geojson
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+
+import pandas as pd
+
+script_dir = os.path.dirname(os.path.realpath(__file__))
+feed_path = Path(script_dir) / "concord_coach_gtfs"
+
+now = datetime.now()
+
+
+class RouteTypes(Enum):
+    TRAM = 0  # Tram, Streetcar, Light rail. Any light rail or street level system within a metropolitan area.
+    SUBWAY = 1  # Subway, Metro. Any underground rail system within a metropolitan area.
+    RAIL = 2  # Rail. Used for intercity or long-distance travel.
+    BUS = 3  # Bus. Used for short- and long-distance bus routes.
+    FERRY = 4  # Ferry. Used for short- and long-distance boat service.
+    CABLE = 5  # Cable tram. Used for street-level rail cars where the cable runs beneath the vehicle (e.g., cable car in San Francisco).
+    AERIAL = 6  # Aerial lift, suspended cable car (e.g., gondola lift, aerial tramway). Cable transport where cabins, cars, gondolas or open chairs are suspended by means of one or more cables.
+    FUNICULAR = 7  # Funicular. Any rail system designed for steep inclines.
+    TROLLEY = 11  # Trolleybus. Electric buses that draw power from overhead wires using poles.
+    MONORAIL = (
+        12  # Monorail. Railway in which the track consists of a single rail or a beam.
+    )
+
+
+class DirectionId(Enum):
+    OUTBOUND = 0  # Travel in one direction (e.g. outbound travel).
+    INBOUND = 1  # Travel in the opposite direction (e.g. inbound travel).
+
+
+class BikesAllowed(Enum):
+    UNKNOWN = 0  # No bike information for the trip.
+    YES = 1  # Vehicle being used on this particular trip can accommodate at least one bicycle.
+    NO = 2  # No bicycles are allowed on this trip.
+
+
+class ServiceAvailable(Enum):
+    YES = 1  # Service is available
+    NO = 0  # Service is not available
+
+
+class ServiceException(Enum):
+    ADDED = 1  # Service is added
+    REMOVED = 2  # Service is removed
+
+
+def _coords(fp):
+    """Helper to open fp and return its first feature’s LineString coords."""
+    with open(fp, "r", encoding="utf-8") as f:
+        fc = geojson.load(f)
+    return fc.features[0].geometry.coordinates
+
+
+# Agency Info
+AGENCY_ID = "CC"
+AGENCY_EMAIL = "info@concordcoachlines.com"
+
+# Route IDs
+PORTLAND_BOS_ID = "PORTLAND_BOS"
+PORTLAND_NYC_ID = "PORTLAND_NYC"
+MIDCOAST_ME_ID = "MIDCOAST_ME"
+SOUTHERN_NH_ID = "SOUTHERN_NH"
+NORTHERN_NH_ID = "NORTHERN_NH"
+INLAND_ME_ID = "INLAND_ME"
+NYC_NH_ID = "NYC_NH"
+
+# Service IDs
+DAILY_SERVICE_ID = "DAILY"
+WEEKDAY_SERVICE_ID = "WEEKDAY"
+MONDAY_SERVICE_ID = "MONDAY"
+TUESDAY_SERVICE_ID = "TUESDAY"
+FW_OF_MONTH_SERVICE_ID = "FW"
+SCHOOL_SERVICE_ID = "SCHL"
+
+AGENCY = {
+    # Agency Id
+    "agency_id": AGENCY_ID,
+    # Agency Name
+    "agency_name": "Concord Coach Lines",
+    # Agency URL
+    "agency_url": "https://concordcoachlines.com",
+    # Agency Timezone
+    "agency_timezone": "America/New_York",
+    "agency_phone": "603-228-3300",
+    "agency_email": AGENCY_EMAIL,
+}
+
+FEED_INFO = {
+    "feed_publisher_name": AGENCY["agency_name"],
+    "feed_publisher_url": AGENCY["agency_url"],
+    "feed_contact_email": AGENCY_EMAIL,
+    "feed_contact_url": AGENCY["agency_url"],
+    "feed_lang": "en-US",
+    "feed_version": 1,
+    "feed_start_date": 20241121,
+    "feed_end_date": 20291121,
+}
+
+ROUTES = [
+    {
+        "route_id": PORTLAND_BOS_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Portland, ME to/from Boston & Logan Airport",
+        "route_long_name": "Portland, ME to/from Boston & Logan Airport",
+        "route_desc": "Portland, ME to/from Boston & Logan Airport",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": PORTLAND_NYC_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Portland, ME to/from New York City",
+        "route_long_name": "Portland, ME to/from New York City",
+        "route_desc": "Portland, ME to/from New York City",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": MIDCOAST_ME_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Midcoast Maine < > Portland, Boston & Logan Airport",
+        "route_long_name": "Midcoast Maine < > Portland, Boston & Logan Airport",
+        "route_desc": "Midcoast Maine < > Portland, Boston & Logan Airport",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": SOUTHERN_NH_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Southern NH < > Boston & Logan Airport",
+        "route_long_name": "Southern NH < > Boston & Logan Airport",
+        "route_desc": "Southern NH < > Boston & Logan Airport",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": NORTHERN_NH_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Northern NH < > Concord, NH, Boston & Logan Airport",
+        "route_long_name": "Northern NH < > Concord, NH, Boston & Logan Airport",
+        "route_desc": "Northern NH < > Concord, NH, Boston & Logan Airport",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": INLAND_ME_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "Inland Maine < > Portland, Boston & Logan Airport",
+        "route_long_name": "Inland Maine < > Portland, Boston & Logan Airport",
+        "route_desc": "Inland Maine < > Portland, Boston & Logan Airport",
+        "route_type": RouteTypes.BUS.value,
+    },
+    {
+        "route_id": NYC_NH_ID,
+        "agency_id": AGENCY_ID,
+        "route_short_name": "New Hampshire to/from New York City",
+        "route_long_name": "New Hampshire to/from New York City",
+        "route_desc": "New Hampshire to/from New York City",
+        "route_type": RouteTypes.BUS.value,
+    },
+]
+
+TRIPS = [
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0315',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('03:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('05:05', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('05:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0415',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('04:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('06:05', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('06:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0515',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('05:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('07:05', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('07:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0615',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('08:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0615',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('08:05', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0730',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('09:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0730',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('09:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0830',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('08:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('10:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('10:45', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0930',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('11:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0930',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('11:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1030',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('12:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1030',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('12:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1130',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1130',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1230',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('14:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1230',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('14:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1330',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('15:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1330',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('15:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1430',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('16:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1430',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('16:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1530',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('17:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1530',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('17:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1645',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('18:40', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1645',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('18:40', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1800',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('18:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('19:55', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_1800',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('18:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('19:55', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_SOUTHBOUND_2000',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('20:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('21:55', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('22:10', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_0555',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('05:45', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('05:55', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('07:55', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_0730',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('09:40', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_0930',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('11:40', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1035',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('12:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1135',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('13:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1235',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('14:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1335',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('15:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1435',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('16:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1535',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('17:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1635',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('18:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1735',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('19:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1835',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('18:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('20:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_1935',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('19:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('21:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_2035',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('20:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('20:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('22:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_2145',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('00:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('21:45', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('22:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_BOS_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_BOS_NORTHBOUND_2325',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_BOS_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('01:25', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('23:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('23:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_NYC_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_NYC_SOUTHBOUND_0630',
+        'trip_short_name': 'New York, NY',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_NYC_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('12:30', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_NYC_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_NYC_SOUTHBOUND_1000',
+        'trip_short_name': 'New York, NY',
+        'direction_id':    0,
+        'shape_id':        'PORTLAND_NYC_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('16:15', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_NYC_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_NYC_NORTHBOUND_1345',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_NYC_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:45', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+            ('19:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        PORTLAND_NYC_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'PORTLAND_NYC_NORTHBOUND_1730',
+        'trip_short_name': 'Portland, ME',
+        'direction_id':    1,
+        'shape_id':        'PORTLAND_NYC_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:30', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+            ('23:45', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+        ],
+    },
+    {
+        'route_id':        MIDCOAST_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'MIDCOAST_ME_SOUTHBOUND_0645',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'MIDCOAST_ME_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:45', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+            ('07:30', 'STOP-548de3d1-bd8e-4d91-953b-d6e1e855bae8'),
+            ('07:40', 'STOP-f14cbec8-2864-41ad-bd32-c5d600e718ae'),
+            ('07:55', 'STOP-c2517a47-6f35-4868-8a09-446b6f1d5988'),
+            ('08:20', 'STOP-59fb8cec-3d87-467c-a7bf-09b66c8aff66'),
+            ('08:50', 'STOP-b67cf7e0-518b-4d0a-9975-6ed55dc2f463'),
+            ('09:20', 'STOP-7dcd2057-360b-4333-b259-1d81c4e6f627'),
+            ('09:35', 'STOP-2a4ae733-a6d6-44a9-aa32-b8e4d97cd4b3'),
+            ('09:50', 'STOP-94218458-ccc8-479f-9e8b-4c278ee19234'),
+            ('10:10', 'STOP-93d8c48f-73e4-4129-856b-bdd07288a373'),
+            ('10:25', 'STOP-27af5c96-da03-4fb1-8c72-6fee48e6cf7f'),
+            ('11:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('11:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('13:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        MIDCOAST_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'MIDCOAST_ME_NORTHBOUND_1035',
+        'trip_short_name': 'Bangor, ME',
+        'direction_id':    1,
+        'shape_id':        'MIDCOAST_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('11:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('13:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:50', 'STOP-27af5c96-da03-4fb1-8c72-6fee48e6cf7f'),
+            ('14:05', 'STOP-93d8c48f-73e4-4129-856b-bdd07288a373'),
+            ('14:25', 'STOP-94218458-ccc8-479f-9e8b-4c278ee19234'),
+            ('14:45', 'STOP-2a4ae733-a6d6-44a9-aa32-b8e4d97cd4b3'),
+            ('15:00', 'STOP-7dcd2057-360b-4333-b259-1d81c4e6f627'),
+            ('15:30', 'STOP-b67cf7e0-518b-4d0a-9975-6ed55dc2f463'),
+            ('15:50', 'STOP-59fb8cec-3d87-467c-a7bf-09b66c8aff66'),
+            ('16:00', 'STOP-c2517a47-6f35-4868-8a09-446b6f1d5988'),
+            ('16:15', 'STOP-f14cbec8-2864-41ad-bd32-c5d600e718ae'),
+            ('16:25', 'STOP-548de3d1-bd8e-4d91-953b-d6e1e855bae8'),
+            ('17:15', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0315',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('03:15', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('03:45', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('04:40', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('04:55', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('05:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('05:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('06:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('05:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('05:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('06:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('06:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('07:40', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('06:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('07:40', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('06:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('06:50', 'STOP-48ee1cea-ba6f-4041-9e1a-d5d896bfd005'),
+            ('07:40', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('08:00', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('07:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('08:40', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('07:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('08:40', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0800',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('08:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('08:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('09:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('09:50', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('09:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('10:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('09:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('10:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1000',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('10:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('11:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('11:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('12:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('11:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('12:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1200',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('12:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('13:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('13:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('14:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('13:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('14:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1400',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('14:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('15:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('15:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('16:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('15:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('16:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1600',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('16:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('17:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('17:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('18:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('17:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('18:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1945',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('19:45', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('20:15', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('21:15', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('21:35', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_0625',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('06:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('07:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('08:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_0725',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('08:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('09:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_0925',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('10:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('11:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1025',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('11:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('12:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1125',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('12:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('13:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1325',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('13:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('14:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('15:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1425',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('15:40', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('16:10', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1525',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('16:40', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('17:10', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1625',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('17:40', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('18:10', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1725',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('18:40', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('19:10', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1825',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('18:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('19:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('19:55', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('20:25', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_1925',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('19:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('20:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('21:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_2025',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('20:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('20:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('21:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('22:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_2125',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('21:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('21:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('22:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('23:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        SOUTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_NORTHBOUND_2225',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('00:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('22:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('22:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('23:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+        ],
+    },
+    {
+        'route_id':        NORTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NORTHERN_NH_SOUTHBOUND_1240',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'NORTHERN_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:40', 'STOP-193f1a74-8c21-442f-8d7d-4fed11795289'),
+            ('12:50', 'STOP-78e19880-5ff7-441b-9150-0fab524ef2c3'),
+            ('13:15', 'STOP-35f112f7-5bcc-4443-b037-865304e4b9ec'),
+            ('13:45', 'STOP-4fc1d400-cbab-43f2-8ca7-37da1967e862'),
+            ('14:10', 'STOP-95fba0a7-32a6-42d6-abe2-0cdcbc980b34'),
+            ('14:40', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('15:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('15:30', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('16:30', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('16:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        NORTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NORTHERN_NH_NORTHBOUND_0725',
+        'trip_short_name': 'Littleton, NH',
+        'direction_id':    1,
+        'shape_id':        'NORTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('08:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('09:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        NORTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NORTHERN_NH_NORTHBOUND_0925',
+        'trip_short_name': 'Littleton, NH',
+        'direction_id':    1,
+        'shape_id':        'NORTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('10:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('11:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        NORTHERN_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NORTHERN_NH_NORTHBOUND_1525',
+        'trip_short_name': 'Littleton, NH',
+        'direction_id':    1,
+        'shape_id':        'NORTHERN_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('15:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('16:40', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('17:10', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_SOUTHBOUND_1015',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'INLAND_ME_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('10:15', 'STOP-1fb028d3-bcd8-443a-813f-ded9328639c1'),
+            ('11:00', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+            ('12:15', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('13:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('13:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('15:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('15:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_SOUTHBOUND_1450',
+        'trip_short_name': 'Boston Logan International Airport',
+        'direction_id':    0,
+        'shape_id':        'INLAND_ME_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:50', 'STOP-1fb028d3-bcd8-443a-813f-ded9328639c1'),
+            ('15:30', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+            ('16:45', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('17:55', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('18:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('19:55', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('19:55', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_0730',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('08:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('09:40', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('10:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('11:20', 'STOP-aad6393e-f519-4661-9d97-138a5c77f389'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_0730',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('07:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('08:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('09:55', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('10:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('10:55', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('12:10', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_0930',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('09:30', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('10:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('11:55', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('12:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('12:55', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('14:10', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+            ('14:30', 'STOP-1fb028d3-bcd8-443a-813f-ded9328639c1'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_1135',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('11:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('12:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('14:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('14:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('15:10', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('16:25', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_1235',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('12:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('13:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('15:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('15:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('16:10', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('17:25', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+            ('17:45', 'STOP-1fb028d3-bcd8-443a-813f-ded9328639c1'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_1435',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('15:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('17:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('17:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('18:10', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('19:25', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_1635',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('16:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('17:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('19:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('19:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('20:10', 'STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a'),
+            ('21:25', 'STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185'),
+        ],
+    },
+    {
+        'route_id':        INLAND_ME_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'INLAND_ME_NORTHBOUND_1735',
+        'trip_short_name': 'Orono, ME / UMaine',
+        'direction_id':    1,
+        'shape_id':        'INLAND_ME_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('17:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
+            ('18:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
+            ('20:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('20:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('21:35', 'STOP-aad6393e-f519-4661-9d97-138a5c77f389'),
+        ],
+    },
+    {
+        'route_id':        NYC_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NYC_NH_SOUTHBOUND_0630',
+        'trip_short_name': 'New York, NY',
+        'direction_id':    0,
+        'shape_id':        'NYC_NH_SOUTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('06:30', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+            ('07:15', 'STOP-ee9e3629-c645-4844-b7da-9ac2b810ad72'),
+            ('12:00', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+        ],
+    },
+    {
+        'route_id':        NYC_NH_ID,
+        'service_id':      DAILY_SERVICE_ID,
+        'trip_id':         'NYC_NH_NORTHBOUND_1400',
+        'trip_short_name': 'Concord, NH',
+        'direction_id':    1,
+        'shape_id':        'NYC_NH_NORTHBOUND',
+        'bikes_allowed':   BikesAllowed.YES.value,
+        'stop_times':      [
+            ('14:00', 'STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e'),
+            ('18:45', 'STOP-ee9e3629-c645-4844-b7da-9ac2b810ad72'),
+            ('19:30', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
+        ],
+    },
+]
+
+STOPS = [
+    {
+        "stop_id": "STOP-aad6393e-f519-4661-9d97-138a5c77f389",
+        "stop_name": "Waterville, ME / Colby College",
+        "stop_desc": "Colby College, Waterville, ME",
+        "stop_lat": 44.56501979999999,
+        "stop_lon": -69.6606893,
+    },
+    {
+        "stop_id": "STOP-afa1beb1-d90e-496d-946c-04fb5696e5b3",
+        "stop_name": "Berlin, NH",
+        "stop_desc": "Irving Oil/Circle K",
+        "stop_lat": 44.4590697,
+        "stop_lon": -71.1872526,
+    },
+    {
+        "stop_id": "STOP-018500bb-30d9-4a89-9ab7-d50f7d66931a",
+        "stop_name": "Jackson, NH",
+        "stop_desc": "Flag Stop at Covered Bridge",
+        "stop_lat": 44.1414901,
+        "stop_lon": -71.1864239,
+    },
+    {
+        "stop_id": "STOP-ab1e0252-3728-4328-b527-bccf8c7a2223",
+        "stop_name": "North Londonderry, NH",
+        "stop_desc": "North Londonderry Transportation Center",
+        "stop_lat": 42.9177156,
+        "stop_lon": -71.37727079999999,
+    },
+    {
+        "stop_id": "STOP-7dcd2057-360b-4333-b259-1d81c4e6f627",
+        "stop_name": "Waldoboro, ME",
+        "stop_desc": "Big Apple Convenience",
+        "stop_lat": 44.1014325,
+        "stop_lon": -69.3820204,
+    },
+    {
+        "stop_id": "STOP-27af5c96-da03-4fb1-8c72-6fee48e6cf7f",
+        "stop_name": "Brunswick, ME / Bowdoin College",
+        "stop_desc": "Brunswick Visitor Center",
+        "stop_lat": 43.9113316,
+        "stop_lon": -69.9653355,
+    },
+    {
+        "stop_id": "STOP-03ccfcf9-71d1-4861-9125-5dee34ba8185",
+        "stop_name": "Bangor, ME",
+        "stop_desc": "Bangor Transportation Center",
+        "stop_lat": 44.816748,
+        "stop_lon": -68.808701,
+    },
+    {
+        "stop_id": "STOP-306e424e-5cb5-4eaf-b3d2-78adf7b5b05a",
+        "stop_name": "Augusta, ME",
+        "stop_desc": "Augusta Transportation Center",
+        "stop_lat": 44.3560455,
+        "stop_lon": -69.7993968,
+    },
+    {
+        "stop_id": "STOP-93d8c48f-73e4-4129-856b-bdd07288a373",
+        "stop_name": "Bath, ME",
+        "stop_desc": "Mail It 4 U",
+        "stop_lat": 43.90605790000001,
+        "stop_lon": -69.8310616,
+    },
+    {
+        "stop_id": "STOP-f14cbec8-2864-41ad-bd32-c5d600e718ae",
+        "stop_name": "Belfast, ME",
+        "stop_desc": "CIRCLE K 22",
+        "stop_lat": 44.4225783,
+        "stop_lon": -69.0260152,
+    },
+    {
+        "stop_id": "STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8",
+        "stop_name": "Boston South Station",
+        "stop_desc": "South Station Bus Terminal",
+        "stop_lat": 42.349993,
+        "stop_lon": -71.05590529999999,
+    },
+    {
+        "stop_id": "STOP-1fb028d3-bcd8-443a-813f-ded9328639c1",
+        "stop_name": "Orono, ME / UMaine",
+        "stop_desc": "University of Maine Campus",
+        "stop_lat": 44.9030243,
+        "stop_lon": -68.6686192,
+    },
+    {
+        "stop_id": "STOP-95fba0a7-32a6-42d6-abe2-0cdcbc980b34",
+        "stop_name": "Tilton, NH",
+        "stop_desc": "Shell Station",
+        "stop_lat": 43.4557815,
+        "stop_lon": -71.5654717,
+    },
+    {
+        "stop_id": "STOP-59fb8cec-3d87-467c-a7bf-09b66c8aff66",
+        "stop_name": "Camden, ME / Rockport, ME",
+        "stop_desc": "Maritime Farms",
+        "stop_lat": 44.1991092,
+        "stop_lon": -69.0785167,
+    },
+    {
+        "stop_id": "STOP-492d6b26-53c6-4fd8-8459-6ef99236b634",
+        "stop_name": "Center Harbor, NH",
+        "stop_desc": "Village Car Wash & Laundromat",
+        "stop_lat": 43.7120279,
+        "stop_lon": -71.4529605,
+    },
+    {
+        "stop_id": "STOP-1bd5b7f8-0bfe-4c71-a9f2-c5725dd689cb",
+        "stop_name": "Conway, NH",
+        "stop_desc": "First Stop Market",
+        "stop_lat": 43.9782223,
+        "stop_lon": -71.1264846,
+    },
+    {
+        "stop_id": "STOP-2a4ae733-a6d6-44a9-aa32-b8e4d97cd4b3",
+        "stop_name": "Damariscotta, ME",
+        "stop_desc": "Waltz Pharmacy / Reny's",
+        "stop_lat": 44.032414,
+        "stop_lon": -69.5310314,
+    },
+    {
+        "stop_id": "STOP-17fcf713-2f9c-4d25-9e35-c3b6992009aa",
+        "stop_name": "Gorham, NH",
+        "stop_desc": "Irving Oil/Circle K",
+        "stop_lat": 44.39698620000001,
+        "stop_lon": -71.19390039999999,
+    },
+    {
+        "stop_id": "STOP-35f112f7-5bcc-4443-b037-865304e4b9ec",
+        "stop_name": "Lincoln, NH",
+        "stop_desc": "7-Eleven",
+        "stop_lat": 44.0381562,
+        "stop_lon": -71.6746102,
+    },
+    {
+        "stop_id": "STOP-c2517a47-6f35-4868-8a09-446b6f1d5988",
+        "stop_name": "Lincolnville, ME",
+        "stop_desc": "Post Office",
+        "stop_lat": 44.2820735,
+        "stop_lon": -69.0090314,
+    },
+    {
+        "stop_id": "STOP-4dfa78fc-3d65-4296-b86e-aa93ce427f10",
+        "stop_name": "Meredith, NH",
+        "stop_desc": "Meredith Irving Circle K",
+        "stop_lat": 43.66143,
+        "stop_lon": -71.4936597,
+    },
+    {
+        "stop_id": "STOP-66de59c2-fd14-45f0-9d35-29e1058ed77e",
+        "stop_name": "North Conway, NH",
+        "stop_desc": "Eastern Slope Inn",
+        "stop_lat": 44.05547,
+        "stop_lon": -71.1309666,
+    },
+    {
+        "stop_id": "STOP-f5e8f10d-4362-409a-8c12-e3c72d0a74a1",
+        "stop_name": "Pinkham Notch, NH",
+        "stop_desc": "Pinkham Notch Visitor Center",
+        "stop_lat": 44.3939153,
+        "stop_lon": -71.1901629,
+    },
+    {
+        "stop_id": "STOP-4fc1d400-cbab-43f2-8ca7-37da1967e862",
+        "stop_name": "Plymouth, NH / Plymouth State University",
+        "stop_desc": "Chase Street Market (Bus stop located across the street)",
+        "stop_lat": 43.7580622,
+        "stop_lon": -71.6872988,
+    },
+    {
+        "stop_id": "STOP-b67cf7e0-518b-4d0a-9975-6ed55dc2f463",
+        "stop_name": "Rockland, ME",
+        "stop_desc": "Maine State Ferry Terminal",
+        "stop_lat": 44.1072333,
+        "stop_lon": -69.1079767,
+    },
+    {
+        "stop_id": "STOP-48ee1cea-ba6f-4041-9e1a-d5d896bfd005",
+        "stop_name": "Salem, NH",
+        "stop_desc": "Salem Transportation Center (Exit 2, I-93)",
+        "stop_lat": 42.7773927,
+        "stop_lon": -71.242375,
+    },
+    {
+        "stop_id": "STOP-548de3d1-bd8e-4d91-953b-d6e1e855bae8",
+        "stop_name": "Searsport, ME",
+        "stop_desc": "Maritime Farms Steamboat",
+        "stop_lat": 44.4605292,
+        "stop_lon": -68.9098171,
+    },
+    {
+        "stop_id": "STOP-c3f6b75a-5ba6-4ffd-b143-899a026a8451",
+        "stop_name": "West Ossipee, NH",
+        "stop_desc": "Watson General Store",
+        "stop_lat": 43.8197033,
+        "stop_lon": -71.20252909999999,
+    },
+    {
+        "stop_id": "STOP-94218458-ccc8-479f-9e8b-4c278ee19234",
+        "stop_name": "Wiscasset, ME",
+        "stop_desc": "Irving Circle K",
+        "stop_lat": 43.9729897,
+        "stop_lon": -69.71189199999999,
+    },
+    {
+        "stop_id": "STOP-193f1a74-8c21-442f-8d7d-4fed11795289",
+        "stop_name": "Littleton, NH",
+        "stop_desc": "Irving Oil/Circle K (Exit 41 off I-93)",
+        "stop_lat": 44.2968732,
+        "stop_lon": -71.7689932,
+    },
+    {
+        "stop_id": "STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec",
+        "stop_name": "Concord, NH",
+        "stop_desc": "Concord Transportation Center",
+        "stop_lat": 43.2126452,
+        "stop_lon": -71.5345171,
+    },
+    {
+        "stop_id": "STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4",
+        "stop_name": "Boston Logan International Airport",
+        "stop_desc": "Terminals A, B, C, E",
+        "stop_lat": 42.365602,
+        "stop_lon": -71.0096136,
+    },
+    {
+        "stop_id": "STOP-78e19880-5ff7-441b-9150-0fab524ef2c3",
+        "stop_name": "Franconia, NH",
+        "stop_desc": "Franconia Market and Deli",
+        "stop_lat": 44.2279462,
+        "stop_lon": -71.74809789999999,
+    },
+    {
+        "stop_id": "STOP-c8c02fac-f0bb-4a29-91a7-60d87c54724e",
+        "stop_name": "New York, NY",
+        "stop_desc": "Midtown Manhattan",
+        "stop_lat": 40.7493776,
+        "stop_lon": -73.9706748,
+    },
+    {
+        "stop_id": "STOP-ee9e3629-c645-4844-b7da-9ac2b810ad72",
+        "stop_name": "Nashua, NH",
+        "stop_desc": "Nashua Transportation Center",
+        "stop_lat": 42.7909274,
+        "stop_lon": -71.50397079999999,
+    },
+    {
+        "stop_id": "STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13",
+        "stop_name": "Portland, ME",
+        "stop_desc": "Portland Transportation Center",
+        "stop_lat": 43.654097,
+        "stop_lon": -70.291258,
+    },
+]
+
+CALENDAR = [
+    {
+        "service_id": DAILY_SERVICE_ID,
+        "monday": ServiceAvailable.YES.value,
+        "tuesday": ServiceAvailable.YES.value,
+        "wednesday": ServiceAvailable.YES.value,
+        "thursday": ServiceAvailable.YES.value,
+        "friday": ServiceAvailable.YES.value,
+        "saturday": ServiceAvailable.YES.value,
+        "sunday": ServiceAvailable.YES.value,
+        "start_date": 20241121,
+        "end_date": 20291121,
+    },
+    {
+        "service_id": WEEKDAY_SERVICE_ID,
+        "monday": ServiceAvailable.YES.value,
+        "tuesday": ServiceAvailable.YES.value,
+        "wednesday": ServiceAvailable.YES.value,
+        "thursday": ServiceAvailable.YES.value,
+        "friday": ServiceAvailable.YES.value,
+        "saturday": ServiceAvailable.NO.value,
+        "sunday": ServiceAvailable.NO.value,
+        "start_date": 20241121,
+        "end_date": 20291121,
+    },
+    {
+        "service_id": SCHOOL_SERVICE_ID,
+        "monday": ServiceAvailable.YES.value,
+        "tuesday": ServiceAvailable.YES.value,
+        "wednesday": ServiceAvailable.YES.value,
+        "thursday": ServiceAvailable.YES.value,
+        "friday": ServiceAvailable.YES.value,
+        "saturday": ServiceAvailable.NO.value,
+        "sunday": ServiceAvailable.NO.value,
+        "start_date": 20241121,
+        "end_date": 20250614,  # Last Day of Classes Machias
+    },
+    {
+        "service_id": MONDAY_SERVICE_ID,
+        "monday": ServiceAvailable.YES.value,
+        "tuesday": ServiceAvailable.NO.value,
+        "wednesday": ServiceAvailable.NO.value,
+        "thursday": ServiceAvailable.NO.value,
+        "friday": ServiceAvailable.NO.value,
+        "saturday": ServiceAvailable.NO.value,
+        "sunday": ServiceAvailable.NO.value,
+        "start_date": 20241121,
+        "end_date": 20291121,
+    },
+    {
+        "service_id": TUESDAY_SERVICE_ID,
+        "monday": ServiceAvailable.NO.value,
+        "tuesday": ServiceAvailable.YES.value,
+        "wednesday": ServiceAvailable.NO.value,
+        "thursday": ServiceAvailable.NO.value,
+        "friday": ServiceAvailable.NO.value,
+        "saturday": ServiceAvailable.NO.value,
+        "sunday": ServiceAvailable.NO.value,
+        "start_date": 20241121,
+        "end_date": 20291121,
+    },
+]
+
+CALENDAR_DATES = [
+    [
+        {
+            "service_id": FW_OF_MONTH_SERVICE_ID,
+            "date": int(f"{year:4}{month:02}{day:02}"),
+            "exception_type": ServiceException.ADDED.value,
+        }
+        # Look at the first week and choose the first wednesday
+        for day in range(1, 8)
+        if datetime(year=year, month=month, day=day).weekday()
+        == calendar.WEDNESDAY.value
+    ].pop()
+    # Look at each month for the next 5 years
+    for year, month in [
+        (now.year + (now.month - 1 + i) // 12, (now.month - 1 + i) % 12 + 1)
+        for i in range(12 * 5)
+    ]
+]
+
+if __name__ == "__main__":
+    FILES = {
+        "agency.txt": [AGENCY],
+        "stops.txt": STOPS,
+        "routes.txt": ROUTES,
+        "trips.txt": [
+            {k: v for k, v in trip.items() if k != "stop_times"} for trip in TRIPS
+        ],
+        "stop_times.txt": [
+            item
+            for sublist in [
+                [
+                    {
+                        "trip_id": trip["trip_id"],
+                        "arrival_time": f"{time}:00",
+                        "departure_time": f"{time}:00",
+                        "stop_id": stop_id,
+                        "stop_sequence": i,
+                    }
+                    for i, (time, stop_id) in enumerate(trip["stop_times"])
+                ]
+                for trip in TRIPS
+            ]
+            for item in sublist
+        ],
+        "calendar.txt": CALENDAR,
+        "calendar_dates.txt": CALENDAR_DATES,
+        "feed_info.txt": [FEED_INFO],
+        "shapes.txt": [
+            {
+                "shape_id": trip["shape_id"],
+                "shape_pt_lat": lat,
+                "shape_pt_lon": lon,
+                "shape_pt_sequence": seq,
+            }
+            for trip in TRIPS
+            if "shape_id" in trip
+            for seq, (lon, lat, *_) in enumerate(
+                _coords(f"{script_dir}/shapes/{trip['shape_id']}.geojson"), start=1
+            )
+        ],
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        for filename, data in FILES.items():
+            pd.DataFrame(data).to_csv(Path(tmpdirname) / filename, index=False)
+        shutil.make_archive(str(feed_path), "zip", tmpdirname)
