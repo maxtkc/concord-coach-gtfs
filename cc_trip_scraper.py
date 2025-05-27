@@ -3,7 +3,7 @@
 multi_route_scraper.py
 
 Scrape both inbound and outbound schedules for each route in ROUTE_ID_MAP
-directly from the raw HTML (no JS rendering), and emit a runnable TRIPS list with:
+from the raw HTML, iterating each <div class="schedule"> block and emit a runnable TRIPS list:
 
   - trip_id         = ROUTEID_DIRECTION_HHMM
   - shape_id        = ROUTEID_DIRECTION
@@ -60,30 +60,39 @@ def scrape_trips(url, route_id):
     soup = fetch_soup(url)
     all_trips = []
 
+    # Iterate each schedule block
     for sched in soup.select("div.schedule"):
         h2 = sched.select_one("h2.schedule-name")
+        if not h2:
+            continue
         dir_token = h2.select_one("span.pre").get_text(strip=True).upper()
-        # determine enum value, but store token for IDs
         dir_enum = (
             DirectionId.OUTBOUND.value
             if "SOUTH" in dir_token or "EAST" in dir_token
             else DirectionId.INBOUND.value
         )
-
         tbl = sched.select_one("table.schedule-table-horizontal.schedule-table")
         if not tbl:
             continue
-
         rows = tbl.select("tbody tr")
-        # find valid departure columns
-        first_cells = rows[0].select("td.cell")[1:]
-        valid_cols = []
-        for idx, cell in enumerate(first_cells):
-            base = cell.contents[0].strip() if cell.contents else ""
-            ampm = cell.select_one("span.am-pm")
-            if not ampm or not base or base == "—":
-                continue
-            valid_cols.append((idx, base + ampm.text))
+        if not rows:
+            continue
+
+        # Determine number of columns after the stop-title column
+        num_cols = len(rows[0].select("td.cell")) - 1
+        valid_cols = []  # each is (col_idx, dep12 at first valid row)
+        for idx in range(num_cols):
+            dep12 = None
+            # find the first non-dash time in this column among rows
+            for row in rows:
+                cell = row.select("td.cell")[idx+1]
+                base = cell.contents[0].strip() if cell.contents else ""
+                ampm = cell.select_one("span.am-pm")
+                if ampm and base and base != "—":
+                    dep12 = base + ampm.text
+                    break
+            if dep12:
+                valid_cols.append((idx, dep12))
 
         for col_idx, dep12 in valid_cols:
             dep24 = datetime.strptime(dep12, "%I:%M%p").strftime("%H:%M")
@@ -91,6 +100,7 @@ def scrape_trips(url, route_id):
             trip_id = f"{route_id}_{dir_token}_{hhmm}"
             shape_id = f"{route_id}_{dir_token}"
 
+            # derive last stop name
             last_txt = rows[-1].select_one("td.stop-title").get_text(" ", strip=True)
             for p in ("Leaves ", "Arrives "):
                 if last_txt.startswith(p):
@@ -100,39 +110,38 @@ def scrape_trips(url, route_id):
                 last_stop = last_txt
 
             trip = {
-                "route_id": route_id,
-                "service_id": DAILY_SERVICE_ID,
-                "trip_id": trip_id,
+                "route_id":        route_id,
+                "service_id":      DAILY_SERVICE_ID,
+                "trip_id":         trip_id,
                 "trip_short_name": last_stop,
-                "direction_id": dir_enum,
-                "shape_id": shape_id,
-                "bikes_allowed": BikesAllowed.YES.value,
-                "stop_times": [],
+                "direction_id":    dir_enum,
+                "shape_id":        shape_id,
+                "bikes_allowed":   BikesAllowed.YES.value,
+                "stop_times":      [],
             }
 
+            # collect stop_times for this column at each row in order
             for row in rows:
-                raw = row.select_one("td.stop-title").get_text(" ", strip=True)
+                title = row.select_one("td.stop-title").get_text(" ", strip=True)
                 for pfx in ("Leaves ", "Arrives "):
-                    if raw.startswith(pfx):
-                        stop_name = raw[len(pfx):]
+                    if title.startswith(pfx):
+                        stop_name = title[len(pfx):]
                         break
                 else:
-                    stop_name = raw
+                    stop_name = title
 
                 sid = lookup.get(stop_name)
                 if not sid:
                     continue
 
-                cell = row.select("td.cell")[col_idx + 1]
+                cell = row.select("td.cell")[col_idx+1]
                 base = cell.contents[0].strip() if cell.contents else ""
                 ampm = cell.select_one("span.am-pm")
-                if not ampm or not base or base == "—":
-                    continue
+                if ampm and base and base != "—":
+                    t24 = datetime.strptime(base + ampm.text, "%I:%M%p").strftime("%H:%M")
+                    trip["stop_times"].append((t24, sid))
 
-                t24 = datetime.strptime(base + ampm.text, "%I:%M%p").strftime("%H:%M")
-                trip["stop_times"].append((t24, sid))
-
-            # sort stop_times by the HH:MM string
+            # sort stop_times by time
             trip["stop_times"].sort(key=lambda x: x[0])
             all_trips.append(trip)
 
@@ -151,7 +160,6 @@ def emit_python(all_trips):
         print(f"        'service_id':      DAILY_SERVICE_ID,")
         print(f"        'trip_id':         '{t['trip_id']}',")
         print(f"        'trip_short_name': '{t['trip_short_name']}',")
-        # print enum reference instead of raw integer
         if t['direction_id'] == DirectionId.INBOUND.value:
             print("        'direction_id':    DirectionId.INBOUND.value,")
         else:
