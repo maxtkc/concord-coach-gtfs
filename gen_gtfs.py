@@ -165,7 +165,7 @@ TRIPS = [
         'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0315',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('03:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
@@ -179,7 +179,7 @@ TRIPS = [
         'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0415',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('04:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
@@ -193,7 +193,7 @@ TRIPS = [
         'trip_id':         'PORTLAND_BOS_SOUTHBOUND_0515',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('05:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
@@ -507,7 +507,7 @@ TRIPS = [
         'trip_id':         'PORTLAND_BOS_SOUTHBOUND_2000',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'PORTLAND_BOS_SOUTHBOUND',
+        'shape_id':        'PORTLAND_BOS_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('20:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
@@ -2241,8 +2241,8 @@ STOPS = [
         "stop_id": "STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4",
         "stop_name": "Boston Logan International Airport",
         "stop_desc": "Terminals A, B, C, E",
-        "stop_lat": 42.365602,
-        "stop_lon": -71.0096136,
+        "stop_lat": 42.36589420781669,
+        "stop_lon": -71.01756139586271,
     },
     {
         "stop_id": "STOP-78e19880-5ff7-441b-9150-0fab524ef2c3",
