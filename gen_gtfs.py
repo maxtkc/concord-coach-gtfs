@@ -110,57 +110,50 @@ ROUTES = [
     {
         "route_id": PORTLAND_BOS_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Portland, ME to/from Boston & Logan Airport",
         "route_long_name": "Portland, ME to/from Boston & Logan Airport",
-        "route_desc": "Portland, ME to/from Boston & Logan Airport",
+        "route_desc": "Hourly bus service to and from Portland Transportation Center and Boston's South Station and Logan Airport",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": PORTLAND_NYC_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Portland, ME to/from New York City",
         "route_long_name": "Portland, ME to/from New York City",
-        "route_desc": "Portland, ME to/from New York City",
+        "route_desc": "Twice a day bus service to and from Portland Transportation Center and Midtown Manhattan in NYC",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": MIDCOAST_ME_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Midcoast Maine < > Portland, Boston & Logan Airport",
-        "route_long_name": "Midcoast Maine < > Portland, Boston & Logan Airport",
-        "route_desc": "Midcoast Maine < > Portland, Boston & Logan Airport",
+        "route_long_name": "Midcoast service between Portland and Bangor",
+        "route_desc": "Daily bus service to and from Boston connecting with the Boston/Portland Service in Portland traveling along the Maine Coast to Bangor",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": SOUTHERN_NH_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Southern NH < > Boston & Logan Airport",
-        "route_long_name": "Southern NH < > Boston & Logan Airport",
-        "route_desc": "Southern NH < > Boston & Logan Airport",
+        "route_long_name": "Southern NH to/from Boston & Logan Airport",
+        "route_desc": "Hourly bus service to and from Boston South Station and Logan Airport to Londonderry and Concord NH, with a daily weekend stop in Salem, NH",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": NORTHERN_NH_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Northern NH < > Concord, NH, Boston & Logan Airport",
-        "route_long_name": "Northern NH < > Concord, NH, Boston & Logan Airport",
-        "route_desc": "Northern NH < > Concord, NH, Boston & Logan Airport",
+        "route_long_name": "Berlin, Littleton, North Conway to/from Boston & Logan Airport via Concord, NH",
+        "route_desc": "Daily service to and from Concord, NH to Berlin, NH, Littleton, NH, and North Conway, NH connecting with Southern NH buses to and from Boston in Concord, NH",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": INLAND_ME_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "Inland Maine < > Portland, Boston & Logan Airport",
-        "route_long_name": "Inland Maine < > Portland, Boston & Logan Airport",
-        "route_desc": "Inland Maine < > Portland, Boston & Logan Airport",
+        "route_long_name": "Inland service between Portland and Bangor via Augusta",
+        "route_desc": "Two hour service between Portland, ME and Bangor, ME stopping in Augusta, ME with Thursday, Friday, Saturday, Sunday, and Monday service to Orono, ME/UMAINE and Friday and Sunday Waterville, ME/Colby College during the spring and fall semesters",
         "route_type": RouteTypes.BUS.value,
     },
     {
         "route_id": NYC_NH_ID,
         "agency_id": AGENCY_ID,
-        "route_short_name": "New Hampshire to/from New York City",
         "route_long_name": "New Hampshire to/from New York City",
-        "route_desc": "New Hampshire to/from New York City",
+        "route_desc": "Thursday, Friday, Saturday, and Sunday bus service between Concord, NH and Midtown Manhattan, NYC, NY via Nashua, NH",
         "route_type": RouteTypes.BUS.value,
     },
 ]
@@ -874,7 +867,7 @@ TRIPS = [
         'stop_times':      [
             ('23:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
             ('23:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
-            ('24:25', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
+            ('25:25', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
         ],
     },
     {
@@ -950,9 +943,6 @@ TRIPS = [
             ('10:10', 'STOP-93d8c48f-73e4-4129-856b-bdd07288a373'),
             ('10:25', 'STOP-27af5c96-da03-4fb1-8c72-6fee48e6cf7f'),
             ('11:00', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
-            ('11:30', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
-            ('13:25', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
-            ('13:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
         ],
     },
     {
@@ -964,9 +954,6 @@ TRIPS = [
         'shape_id':        'MIDCOAST_ME_NORTHBOUND',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
-            ('10:35', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
-            ('11:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
-            ('13:10', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
             ('13:15', 'STOP-c99cb943-4db3-4fb6-b612-c97a7d202d13'),
             ('13:50', 'STOP-27af5c96-da03-4fb1-8c72-6fee48e6cf7f'),
             ('14:05', 'STOP-93d8c48f-73e4-4129-856b-bdd07288a373'),
@@ -2413,15 +2400,14 @@ if __name__ == "__main__":
         "feed_info.txt": [FEED_INFO],
         "shapes.txt": [
             {
-                "shape_id": trip["shape_id"],
+                "shape_id": shape_id,
                 "shape_pt_lat": lat,
                 "shape_pt_lon": lon,
                 "shape_pt_sequence": seq,
             }
-            for trip in TRIPS
-            if "shape_id" in trip
+            for shape_id in sorted({t["shape_id"] for t in TRIPS if "shape_id" in t})
             for seq, (lon, lat, *_) in enumerate(
-                _coords(f"{script_dir}/shapes/{trip['shape_id']}.geojson"), start=1
+                _coords(f"{script_dir}/shapes/{shape_id}.geojson"), start=1
             )
         ],
     }
