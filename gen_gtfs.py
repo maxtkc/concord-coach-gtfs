@@ -76,6 +76,7 @@ NYC_NH_ID = "NYC_NH"
 
 # Service IDs
 DAILY_SERVICE_ID = "DAILY"
+FRI_SUN_SERVICE_ID = "FRI_SUN"
 WEEKDAY_SERVICE_ID = "WEEKDAY"
 MONDAY_SERVICE_ID = "MONDAY"
 TUESDAY_SERVICE_ID = "TUESDAY"
@@ -892,7 +893,7 @@ TRIPS = [
     },
     {
         'route_id':        PORTLAND_NYC_ID,
-        'service_id':      DAILY_SERVICE_ID,
+        'service_id':      FRI_SUN_SERVICE_ID,
         'trip_id':         'PORTLAND_NYC_SOUTHBOUND_1000',
         'trip_short_name': 'New York, NY',
         'direction_id':    DirectionId.OUTBOUND.value,
@@ -918,7 +919,7 @@ TRIPS = [
     },
     {
         'route_id':        PORTLAND_NYC_ID,
-        'service_id':      DAILY_SERVICE_ID,
+        'service_id':      FRI_SUN_SERVICE_ID,
         'trip_id':         'PORTLAND_NYC_NORTHBOUND_1730',
         'trip_short_name': 'Portland, ME',
         'direction_id':    DirectionId.INBOUND.value,
