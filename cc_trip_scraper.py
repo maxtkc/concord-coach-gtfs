@@ -12,22 +12,23 @@ from the raw HTML, iterating each <div class="schedule"> block and emit a runnab
   - stop_times      = [("HH:MM", stop_id), …]
 """
 
-import requests
 from datetime import datetime
+
+import requests
 from bs4 import BeautifulSoup
 
 from gen_gtfs import (
-    STOPS,
     DAILY_SERVICE_ID,
-    DirectionId,
-    BikesAllowed,
+    INLAND_ME_ID,
+    MIDCOAST_ME_ID,
+    NORTHERN_NH_ID,
+    NYC_NH_ID,
     PORTLAND_BOS_ID,
     PORTLAND_NYC_ID,
-    MIDCOAST_ME_ID,
     SOUTHERN_NH_ID,
-    NORTHERN_NH_ID,
-    INLAND_ME_ID,
-    NYC_NH_ID,
+    STOPS,
+    BikesAllowed,
+    DirectionId,
 )
 
 HEADERS = {
@@ -39,13 +40,13 @@ HEADERS = {
 }
 
 ROUTE_ID_MAP = {
-    "https://concordcoachlines.com/route/portland-me-to-from-boston-logan-airport/":         PORTLAND_BOS_ID,
-    "https://concordcoachlines.com/route/portland-me-new-york-city/":                        PORTLAND_NYC_ID,
+    "https://concordcoachlines.com/route/portland-me-to-from-boston-logan-airport/": PORTLAND_BOS_ID,
+    "https://concordcoachlines.com/route/portland-me-new-york-city/": PORTLAND_NYC_ID,
     "https://concordcoachlines.com/route/midcoast-maine-to-from-portlandbostonlogan-airport/": MIDCOAST_ME_ID,
     "https://concordcoachlines.com/route/concord-nhnorth-londonderrysalem-to-from-bostonlogan-airport/": SOUTHERN_NH_ID,
-    "https://concordcoachlines.com/route/northern-nh-to-from-boston-logan-airport/":         NORTHERN_NH_ID,
+    "https://concordcoachlines.com/route/northern-nh-to-from-boston-logan-airport/": NORTHERN_NH_ID,
     "https://concordcoachlines.com/route/bangoraugustaauburn-to-from-portlandbostonlogan-airport/": INLAND_ME_ID,
-    "https://concordcoachlines.com/route/new-hampshire-to-from-new-york-city/":              NYC_NH_ID,
+    "https://concordcoachlines.com/route/new-hampshire-to-from-new-york-city/": NYC_NH_ID,
 }
 
 
@@ -85,7 +86,7 @@ def scrape_trips(url, route_id):
             dep12 = None
             # find the first non-dash time in this column among rows
             for row in rows:
-                cell = row.select("td.cell")[idx+1]
+                cell = row.select("td.cell")[idx + 1]
                 base = cell.contents[0].strip() if cell.contents else ""
                 ampm = cell.select_one("span.am-pm")
                 if ampm and base and base != "—":
@@ -104,20 +105,20 @@ def scrape_trips(url, route_id):
             last_txt = rows[-1].select_one("td.stop-title").get_text(" ", strip=True)
             for p in ("Leaves ", "Arrives "):
                 if last_txt.startswith(p):
-                    last_stop = last_txt[len(p):]
+                    last_stop = last_txt[len(p) :]
                     break
             else:
                 last_stop = last_txt
 
             trip = {
-                "route_id":        route_id,
-                "service_id":      DAILY_SERVICE_ID,
-                "trip_id":         trip_id,
+                "route_id": route_id,
+                "service_id": DAILY_SERVICE_ID,
+                "trip_id": trip_id,
                 "trip_short_name": last_stop,
-                "direction_id":    dir_enum,
-                "shape_id":        shape_id,
-                "bikes_allowed":   BikesAllowed.YES.value,
-                "stop_times":      [],
+                "direction_id": dir_enum,
+                "shape_id": shape_id,
+                "bikes_allowed": BikesAllowed.YES.value,
+                "stop_times": [],
             }
 
             # collect stop_times for this column at each row in order
@@ -125,7 +126,7 @@ def scrape_trips(url, route_id):
                 title = row.select_one("td.stop-title").get_text(" ", strip=True)
                 for pfx in ("Leaves ", "Arrives "):
                     if title.startswith(pfx):
-                        stop_name = title[len(pfx):]
+                        stop_name = title[len(pfx) :]
                         break
                 else:
                     stop_name = title
@@ -134,11 +135,13 @@ def scrape_trips(url, route_id):
                 if not sid:
                     continue
 
-                cell = row.select("td.cell")[col_idx+1]
+                cell = row.select("td.cell")[col_idx + 1]
                 base = cell.contents[0].strip() if cell.contents else ""
                 ampm = cell.select_one("span.am-pm")
                 if ampm and base and base != "—":
-                    t24 = datetime.strptime(base + ampm.text, "%I:%M%p").strftime("%H:%M")
+                    t24 = datetime.strptime(base + ampm.text, "%I:%M%p").strftime(
+                        "%H:%M"
+                    )
                     trip["stop_times"].append((t24, sid))
 
             # sort stop_times by time
@@ -160,7 +163,7 @@ def emit_python(all_trips):
         print(f"        'service_id':      DAILY_SERVICE_ID,")
         print(f"        'trip_id':         '{t['trip_id']}',")
         print(f"        'trip_short_name': '{t['trip_short_name']}',")
-        if t['direction_id'] == DirectionId.INBOUND.value:
+        if t["direction_id"] == DirectionId.INBOUND.value:
             print("        'direction_id':    DirectionId.INBOUND.value,")
         else:
             print("        'direction_id':    DirectionId.OUTBOUND.value,")

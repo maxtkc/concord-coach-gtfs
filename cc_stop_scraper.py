@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
+import json
 import os
 import re
 import sys
 import uuid
-import json
-import requests
 import xml.etree.ElementTree as ET
-from urllib.parse import urlparse, parse_qs, unquote_plus
+from urllib.parse import parse_qs, unquote_plus, urlparse
+
+import requests
 from bs4 import BeautifulSoup
 
 # ── CONFIGURATION ──
@@ -22,6 +23,7 @@ BROWSER_UA = (
 
 SITEMAP_URL = "https://concordcoachlines.com/stop-sitemap.xml"
 
+
 # ── UTILITIES ──
 def fetch_stop_urls(sitemap_url: str) -> list[str]:
     resp = requests.get(sitemap_url, headers={"User-Agent": BROWSER_UA})
@@ -30,12 +32,14 @@ def fetch_stop_urls(sitemap_url: str) -> list[str]:
     all_urls = [loc.text for loc in root.findall(".//{*}loc")]
     return [u for u in all_urls if urlparse(u).path.startswith("/stop/")]
 
+
 def extract_iframe_src(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     iframe = soup.find("iframe", src=re.compile(r"google\.com/maps/embed"))
     if not iframe:
         raise ValueError("No Google Maps iframe found")
     return iframe["src"]
+
 
 def geocode_google(address: str) -> tuple[float, float]:
     resp = requests.get(
@@ -49,6 +53,7 @@ def geocode_google(address: str) -> tuple[float, float]:
         raise ValueError(f"Geocode failed: {data.get('status')}")
     loc = data["results"][0]["geometry"]["location"]
     return loc["lat"], loc["lng"]
+
 
 def parse_coords_from_embed(src: str) -> tuple[float, float]:
     # 1) !3dLAT!4dLON
@@ -72,6 +77,7 @@ def parse_coords_from_embed(src: str) -> tuple[float, float]:
             return geocode_google(addr)
     raise ValueError("Could not parse coordinates from iframe src")
 
+
 def extract_metadata(html: str) -> tuple[str, str]:
     soup = BeautifulSoup(html, "html.parser")
     h1 = soup.find("h1")
@@ -88,6 +94,7 @@ def extract_metadata(html: str) -> tuple[str, str]:
         p = h1.find_next("p")
         desc = p.get_text(strip=True) if p else ""
     return name, desc
+
 
 # ── MAIN ──
 def main():
@@ -112,7 +119,7 @@ def main():
                 "stop_name": name,
                 "stop_desc": desc,
                 "stop_lat": lat,
-                "stop_lon": lon
+                "stop_lon": lon,
             }
             results.append(stop_obj)
 
@@ -123,6 +130,6 @@ def main():
     json.dump(results, sys.stdout, indent=2)
     sys.stdout.write("\n")
 
+
 if __name__ == "__main__":
     main()
-

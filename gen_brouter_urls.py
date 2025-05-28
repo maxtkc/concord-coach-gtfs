@@ -8,11 +8,11 @@ at zoom 8 / 43.269,-70.464, applying South Station and Logan Airport
 overrides. Print only unique combinations of shape_id and URL.
 """
 
-from gen_gtfs import TRIPS, STOPS
+from gen_gtfs import STOPS, TRIPS
 
 # STOP IDs for overrides
 SOUTH_STATION_ID = "STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8"
-LOGAN_AIRPORT_ID  = "STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4"
+LOGAN_AIRPORT_ID = "STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4"
 
 # Manual points around South Station (lon, lat)
 SOUTH_STRAIGHT_POINTS = [
@@ -27,7 +27,7 @@ LOGAN_OVERRIDE_POINT = (-71.018114, 42.365582)
 stop_lookup = {s["stop_id"]: (s["stop_lon"], s["stop_lat"]) for s in STOPS}
 
 if __name__ == "__main__":
-    base   = "https://brouter.de/brouter-web/#map=8/43.269/-70.464/standard&lonlats="
+    base = "https://brouter.de/brouter-web/#map=8/43.269/-70.464/standard&lonlats="
     suffix = "&profile=car-fast"
 
     seen = set()
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         straight_param = f"&straight={south_index}" if south_index is not None else ""
         url = f"{base}{lonlats}{suffix}{straight_param}"
 
-        key = (trip['shape_id'], url)
+        key = (trip["shape_id"], url)
         if key in seen:
             continue
         seen.add(key)

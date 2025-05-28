@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import sys
-import requests
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
+
+import requests
 from bs4 import BeautifulSoup
 
 # ── CONFIGURATION ──
@@ -15,12 +16,16 @@ ROUTE_SITEMAP_URL = "https://concordcoachlines.com/route-sitemap.xml"
 
 # ── UTILITIES ──
 
+
 def fetch_route_urls(sitemap_url: str) -> list[str]:
     resp = requests.get(sitemap_url, headers={"User-Agent": BROWSER_UA})
     resp.raise_for_status()
     root = ET.fromstring(resp.text)
-    return [loc.text for loc in root.findall(".//{*}loc")
-            if urlparse(loc.text).path.startswith("/route/")]
+    return [
+        loc.text
+        for loc in root.findall(".//{*}loc")
+        if urlparse(loc.text).path.startswith("/route/")
+    ]
 
 
 def extract_route_name(html: str) -> str:
@@ -30,11 +35,12 @@ def extract_route_name(html: str) -> str:
         raise ValueError("No <h1> found on route page.")
     return h1.get_text(strip=True)
 
+
 # ── MAIN ──
 def main():
     route_urls = fetch_route_urls(ROUTE_SITEMAP_URL)
     base_consts = []  # list of (CONST_NAME, slug)
-    route_data = []   # list of (CONST_NAME, route_name)
+    route_data = []  # list of (CONST_NAME, route_name)
 
     for url in route_urls:
         try:
@@ -56,18 +62,18 @@ def main():
     print()
 
     # output ROUTES list
-    print('ROUTES = [')
+    print("ROUTES = [")
     for const_name, name in route_data:
-        print('    {')
+        print("    {")
         print(f'        "route_id": {const_name},')
         print(f'        "agency_id": AGENCY_ID,')
         print(f'        "route_short_name": "{name}",')
         print(f'        "route_long_name": "{name}",')
         print(f'        "route_desc": "{name}",')
         print(f'        "route_type": RouteTypes.BUS.value,')
-        print('    },')
-    print(']')
+        print("    },")
+    print("]")
+
 
 if __name__ == "__main__":
     main()
-
