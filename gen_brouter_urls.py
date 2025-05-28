@@ -4,13 +4,8 @@ generate_brouter_web_urls.py
 
 For each trip in your GTFS TRIPS, generate a BRouter-Web URL
 (with car-fast profile) including a default map view centered
-at zoom 8 / 43.269,-70.464.
-
-1) Sort the stop_times by time
-2) Walk that sorted list, inserting overrides for South Station
-   and Logan Airport
-3) Record the index of the South Station insert and use that
-   as the straight=<idx> flag
+at zoom 8 / 43.269,-70.464, applying South Station and Logan Airport
+overrides. Print only unique combinations of shape_id and URL.
 """
 
 from gen_gtfs import TRIPS, STOPS
@@ -35,14 +30,15 @@ if __name__ == "__main__":
     base   = "https://brouter.de/brouter-web/#map=8/43.269/-70.464/standard&lonlats="
     suffix = "&profile=car-fast"
 
+    seen = set()
     for trip in TRIPS:
-        # 1) sort stop_times by the HH:MM string
+        # sort stop_times by the HH:MM string
         sorted_st = sorted(trip["stop_times"], key=lambda x: x[0])
 
         coords = []
         south_index = None
 
-        # 2) iterate sorted times and apply overrides
+        # apply overrides and build coords list
         for time, sid in sorted_st:
             if sid == SOUTH_STATION_ID:
                 south_index = len(coords)
@@ -52,10 +48,12 @@ if __name__ == "__main__":
             else:
                 coords.append(stop_lookup[sid])
 
-        # 3) build the lonlats and straight flag
         lonlats = ";".join(f"{lon},{lat}" for lon, lat in coords)
         straight_param = f"&straight={south_index}" if south_index is not None else ""
-
         url = f"{base}{lonlats}{suffix}{straight_param}"
-        print(f"{trip['trip_id']}: {url}")
 
+        key = (trip['shape_id'], url)
+        if key in seen:
+            continue
+        seen.add(key)
+        print(f"{trip['shape_id']}: {url}")

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-import calendar
+import holidays
 import os
 import shutil
 import tempfile
-import json
 import geojson
 from datetime import datetime
 from enum import Enum
@@ -78,10 +77,7 @@ NYC_NH_ID = "NYC_NH"
 DAILY_SERVICE_ID = "DAILY"
 FRI_SUN_SERVICE_ID = "FRI_SUN"
 WEEKDAY_SERVICE_ID = "WEEKDAY"
-MONDAY_SERVICE_ID = "MONDAY"
-TUESDAY_SERVICE_ID = "TUESDAY"
-FW_OF_MONTH_SERVICE_ID = "FW"
-SCHOOL_SERVICE_ID = "SCHL"
+WEEKEND_SERVICE_ID = "WEEKEND"
 
 AGENCY = {
     # Agency Id
@@ -103,8 +99,8 @@ FEED_INFO = {
     "feed_contact_url": AGENCY["agency_url"],
     "feed_lang": "en-US",
     "feed_version": 1,
-    "feed_start_date": 20241121,
-    "feed_end_date": 20291121,
+    "feed_start_date": 20250528,
+    "feed_end_date": 20290528,
 }
 
 ROUTES = [
@@ -986,9 +982,9 @@ TRIPS = [
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
         'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0315',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('03:15', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1000,10 +996,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('05:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1014,10 +1010,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0500_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('05:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1028,10 +1024,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1041,11 +1037,11 @@ TRIPS = [
     },
     {
         'route_id':        SOUTHERN_NH_ID,
-        'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
-        'trip_short_name': 'Boston Logan International Airport',
+        'service_id':      WEEKDAY_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1055,11 +1051,11 @@ TRIPS = [
     },
     {
         'route_id':        SOUTHERN_NH_ID,
-        'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600',
-        'trip_short_name': 'Boston Logan International Airport',
+        'service_id':      WEEKEND_SERVICE_ID,
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0600_SALEM',
+        'trip_short_name': 'Boston Logan International Airport via Salem',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SALEM',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('06:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1072,10 +1068,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('07:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1086,10 +1082,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0700_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('07:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1115,10 +1111,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('09:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1129,10 +1125,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_0900_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('09:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1143,10 +1139,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1000',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1000_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('10:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1157,10 +1153,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('11:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1171,10 +1167,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1100_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('11:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1185,10 +1181,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1200',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1200_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('12:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1199,10 +1195,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('13:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1213,10 +1209,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1300_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('13:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1227,10 +1223,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1400',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1400_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('14:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1241,10 +1237,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('15:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1255,10 +1251,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1500_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('15:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1269,10 +1265,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1600',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1600_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('16:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1283,10 +1279,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700_LOGAN',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('17:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1297,10 +1293,10 @@ TRIPS = [
     {
         'route_id':        SOUTHERN_NH_ID,
         'service_id':      DAILY_SERVICE_ID,
-        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700',
-        'trip_short_name': 'Boston Logan International Airport',
+        'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1700_SOUTH_STATION',
+        'trip_short_name': 'Boston South Station',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('17:00', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1314,7 +1310,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_SOUTHBOUND_1945',
         'trip_short_name': 'Boston Logan International Airport',
         'direction_id':    DirectionId.OUTBOUND.value,
-        'shape_id':        'SOUTHERN_NH_SOUTHBOUND',
+        'shape_id':        'SOUTHERN_NH_SOUTHBOUND_LOGAN_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('19:45', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
@@ -1329,7 +1325,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_0625',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('06:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1344,7 +1340,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_0725',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('07:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1358,7 +1354,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_0800',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SALEM',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('08:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1373,7 +1369,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_0925',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('09:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1387,7 +1383,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1000',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SALEM',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('10:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1402,7 +1398,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1025',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('10:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1416,7 +1412,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1125',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('11:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1430,7 +1426,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1200',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('12:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1444,7 +1440,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1325',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('13:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1458,7 +1454,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1400',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('14:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1472,7 +1468,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1425',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('14:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1486,7 +1482,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1500',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('15:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1500,7 +1496,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1525',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('15:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1514,7 +1510,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1600',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('16:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1528,7 +1524,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1625',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('16:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1542,7 +1538,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1700',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('17:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1556,7 +1552,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1725',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('17:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1570,7 +1566,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1800',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('18:00', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1599,7 +1595,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_1925',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_LOGAN',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('19:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
@@ -1613,7 +1609,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_2025',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('20:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1628,7 +1624,7 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_2125',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
             ('21:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
@@ -1643,13 +1639,13 @@ TRIPS = [
         'trip_id':         'SOUTHERN_NH_NORTHBOUND_2225',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
-        'shape_id':        'SOUTHERN_NH_NORTHBOUND',
+        'shape_id':        'SOUTHERN_NH_NORTHBOUND_SOUTH_STATION_FIRST',
         'bikes_allowed':   BikesAllowed.YES.value,
         'stop_times':      [
-            ('00:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
             ('22:15', 'STOP-0a858b61-d2dc-44f8-a6fd-9a528df6a3a8'),
             ('22:25', 'STOP-9a1d503f-4812-4ec4-af0d-6275316cc2c4'),
             ('23:35', 'STOP-ab1e0252-3728-4328-b527-bccf8c7a2223'),
+            ('24:05', 'STOP-9f79a516-828e-4d8b-a56b-2af17c7c16ec'),
         ],
     },
     {
@@ -2382,8 +2378,20 @@ CALENDAR = [
         "friday": ServiceAvailable.YES.value,
         "saturday": ServiceAvailable.YES.value,
         "sunday": ServiceAvailable.YES.value,
-        "start_date": 20241121,
-        "end_date": 20291121,
+        "start_date": 20250528,
+        "end_date": 20290528,
+    },
+    {
+        "service_id": FRI_SUN_SERVICE_ID,
+        "monday": ServiceAvailable.NO.value,
+        "tuesday": ServiceAvailable.NO.value,
+        "wednesday": ServiceAvailable.NO.value,
+        "thursday": ServiceAvailable.NO.value,
+        "friday": ServiceAvailable.YES.value,
+        "saturday": ServiceAvailable.NO.value,
+        "sunday": ServiceAvailable.YES.value,
+        "start_date": 20250528,
+        "end_date": 20290528,
     },
     {
         "service_id": WEEKDAY_SERVICE_ID,
@@ -2394,64 +2402,30 @@ CALENDAR = [
         "friday": ServiceAvailable.YES.value,
         "saturday": ServiceAvailable.NO.value,
         "sunday": ServiceAvailable.NO.value,
-        "start_date": 20241121,
-        "end_date": 20291121,
+        "start_date": 20250528,
+        "end_date": 20290528,
     },
     {
-        "service_id": SCHOOL_SERVICE_ID,
-        "monday": ServiceAvailable.YES.value,
-        "tuesday": ServiceAvailable.YES.value,
-        "wednesday": ServiceAvailable.YES.value,
-        "thursday": ServiceAvailable.YES.value,
-        "friday": ServiceAvailable.YES.value,
-        "saturday": ServiceAvailable.NO.value,
-        "sunday": ServiceAvailable.NO.value,
-        "start_date": 20241121,
-        "end_date": 20250614,  # Last Day of Classes Machias
-    },
-    {
-        "service_id": MONDAY_SERVICE_ID,
-        "monday": ServiceAvailable.YES.value,
+        "service_id": WEEKEND_SERVICE_ID,
+        "monday": ServiceAvailable.NO.value,
         "tuesday": ServiceAvailable.NO.value,
         "wednesday": ServiceAvailable.NO.value,
         "thursday": ServiceAvailable.NO.value,
         "friday": ServiceAvailable.NO.value,
-        "saturday": ServiceAvailable.NO.value,
-        "sunday": ServiceAvailable.NO.value,
-        "start_date": 20241121,
-        "end_date": 20291121,
-    },
-    {
-        "service_id": TUESDAY_SERVICE_ID,
-        "monday": ServiceAvailable.NO.value,
-        "tuesday": ServiceAvailable.YES.value,
-        "wednesday": ServiceAvailable.NO.value,
-        "thursday": ServiceAvailable.NO.value,
-        "friday": ServiceAvailable.NO.value,
-        "saturday": ServiceAvailable.NO.value,
-        "sunday": ServiceAvailable.NO.value,
-        "start_date": 20241121,
-        "end_date": 20291121,
+        "saturday": ServiceAvailable.YES.value,
+        "sunday": ServiceAvailable.YES.value,
+        "start_date": 20250528,
+        "end_date": 20290528,
     },
 ]
 
 CALENDAR_DATES = [
-    [
-        {
-            "service_id": FW_OF_MONTH_SERVICE_ID,
-            "date": int(f"{year:4}{month:02}{day:02}"),
-            "exception_type": ServiceException.ADDED.value,
-        }
-        # Look at the first week and choose the first wednesday
-        for day in range(1, 8)
-        if datetime(year=year, month=month, day=day).weekday()
-        == calendar.WEDNESDAY.value
-    ].pop()
-    # Look at each month for the next 5 years
-    for year, month in [
-        (now.year + (now.month - 1 + i) // 12, (now.month - 1 + i) % 12 + 1)
-        for i in range(12 * 5)
-    ]
+    {
+        "service_id": WEEKDAY_SERVICE_ID,
+        "date": int(d.strftime("%Y%m%d")),            # e.g. 20250704
+        "exception_type": ServiceException.REMOVED.value,
+    }
+    for d in sorted(holidays.US(years=range(2025, 2030)).keys())
 ]
 
 if __name__ == "__main__":
