@@ -1,0 +1,1 @@
+This repo helps scrape Concord Coaches website to generate a GTFS feed with the schedule. The scraping (generated mostly by chatgpt) gets you most of the way, and then some of the shapefile generation and calendar specifications are done manually.
