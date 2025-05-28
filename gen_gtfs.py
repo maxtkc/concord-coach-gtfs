@@ -3,7 +3,7 @@
 import os
 import shutil
 import tempfile
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
@@ -2299,7 +2299,7 @@ CALENDAR = [
         "start_date": 20250528,
         "end_date": 20290528,
     },
-    {  # TODO: restrict to umaine Fall/Spring sem
+    {
         "service_id": FRI_SUN_UMAINE_SERVICE_ID,
         "monday": ServiceAvailable.NO.value,
         "tuesday": ServiceAvailable.NO.value,
@@ -2347,7 +2347,7 @@ CALENDAR = [
         "start_date": 20250528,
         "end_date": 20290528,
     },
-    {  # TODO: restrict to umaine Fall/Spring sem
+    {
         "service_id": EXT_WEEKEND_UMAINE_SERVICE_ID,
         "monday": ServiceAvailable.YES.value,
         "tuesday": ServiceAvailable.NO.value,
@@ -2361,6 +2361,14 @@ CALENDAR = [
     },
 ]
 
+
+def is_in_semester(d):
+    y = d.year
+    return (date(y, 1, 15) <= d <= date(y, 5, 15)) or (
+        date(y, 8, 16) <= d <= date(y, 12, 20)
+    )
+
+
 CALENDAR_DATES = [
     {
         "service_id": WEEKDAY_SERVICE_ID,
@@ -2368,6 +2376,15 @@ CALENDAR_DATES = [
         "exception_type": ServiceException.REMOVED.value,
     }
     for d in sorted(holidays.US(years=range(2025, 2030)).keys())
+] + [
+    {
+        "service_id": sid,
+        "date": int(d.strftime("%Y%m%d")),
+        "exception_type": ServiceException.REMOVED.value,
+    }
+    for sid in [EXT_WEEKEND_SERVICE_ID, FRI_SUN_UMAINE_SERVICE_ID]
+    for i in range((date(2029, 5, 28) - date(2025, 5, 28)).days + 1)
+    if not is_in_semester(d := date(2025, 5, 28) + timedelta(days=i))
 ]
 
 if __name__ == "__main__":
