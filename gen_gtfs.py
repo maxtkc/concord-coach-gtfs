@@ -78,6 +78,7 @@ DAILY_SERVICE_ID = "DAILY"
 FRI_SUN_SERVICE_ID = "FRI_SUN"
 WEEKDAY_SERVICE_ID = "WEEKDAY"
 WEEKEND_SERVICE_ID = "WEEKEND"
+EXT_WEEKEND_SERVICE_ID = "EXT_WEEKEND"
 
 AGENCY = {
     # Agency Id
@@ -2046,7 +2047,7 @@ TRIPS = [
     },
     {
         'route_id':        NYC_NH_ID,
-        'service_id':      DAILY_SERVICE_ID,
+        'service_id':      EXT_WEEKEND_SERVICE_ID,
         'trip_id':         'NYC_NH_SOUTHBOUND_0630',
         'trip_short_name': 'New York, NY',
         'direction_id':    DirectionId.OUTBOUND.value,
@@ -2060,7 +2061,7 @@ TRIPS = [
     },
     {
         'route_id':        NYC_NH_ID,
-        'service_id':      DAILY_SERVICE_ID,
+        'service_id':      EXT_WEEKEND_SERVICE_ID,
         'trip_id':         'NYC_NH_NORTHBOUND_1400',
         'trip_short_name': 'Concord, NH',
         'direction_id':    DirectionId.INBOUND.value,
@@ -2374,6 +2375,18 @@ CALENDAR = [
         "thursday": ServiceAvailable.NO.value,
         "friday": ServiceAvailable.NO.value,
         "saturday": ServiceAvailable.YES.value,
+        "sunday": ServiceAvailable.YES.value,
+        "start_date": 20250528,
+        "end_date": 20290528,
+    },
+    {
+        "service_id": EXT_WEEKEND_SERVICE_ID,
+        "monday": ServiceAvailable.YES.value,
+        "tuesday": ServiceAvailable.NO.value,
+        "wednesday": ServiceAvailable.NO.value,
+        "thursday": ServiceAvailable.YES.value,
+        "friday": ServiceAvailable.YES.value,
+        "saturday": ServiceAvailable.NO.value,
         "sunday": ServiceAvailable.YES.value,
         "start_date": 20250528,
         "end_date": 20290528,
